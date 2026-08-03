@@ -25,12 +25,13 @@ function extractColors(description: string): string[] {
   return [...hexMatches, ...rgbMatches]
 }
 
-// Derive a gentle grain amount from mood hints in the description
+// Derive a grain amount from mood hints in the description. Kept visible
+// enough that the video reads as "alive" rather than a static color card.
 function extractGrainLevel(visualDescription: string): number {
   const lower = visualDescription.toLowerCase()
   const isSlow = /slow|gentle|soft|calm|serene/.test(lower)
   const isFast = /fast|quick|energetic|dynamic|vibrant/.test(lower)
-  return isSlow ? 4 : isFast ? 14 : 8
+  return isSlow ? 12 : isFast ? 28 : 18
 }
 
 export async function renderVideo(options: RenderOptions): Promise<string> {

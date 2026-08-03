@@ -57,7 +57,9 @@ export async function generateAudio(options: AudioGenerationOptions): Promise<st
     // Base drone frequency: lower for calmer/meditative moods
     const frequency = mood === "meditative" ? 96 : mood === "energetic" ? 220 : 130
 
-    // Mix a soft sine drone with pink noise texture for a simple ambient bed
+    // Mix a soft sine drone with pink noise texture for a simple ambient bed.
+    // Volumes are tuned to be clearly audible (not just a faint hum) while
+    // staying mellow enough for background listening.
     const ffmpegArgs = [
       "-f",
       "lavfi",
@@ -66,9 +68,9 @@ export async function generateAudio(options: AudioGenerationOptions): Promise<st
       "-f",
       "lavfi",
       "-i",
-      `anoisesrc=sample_rate=48000:amplitude=0.03:duration=${options.duration}:color=pink`,
+      `anoisesrc=sample_rate=48000:amplitude=0.15:duration=${options.duration}:color=pink`,
       "-filter_complex",
-      `[0]volume=0.12[tone];[1]volume=0.06[noise];[tone][noise]amix=inputs=2:duration=first:dropout_transition=2[out]`,
+      `[0]volume=0.35[tone];[1]volume=0.2[noise];[tone][noise]amix=inputs=2:duration=first:dropout_transition=2[out]`,
       "-map",
       "[out]",
       "-ac",
