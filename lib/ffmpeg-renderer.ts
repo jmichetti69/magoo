@@ -5,6 +5,7 @@ import { execFile } from "child_process"
 import { promisify } from "util"
 import fs from "fs"
 import path from "path"
+import ffmpegStatic from "ffmpeg-static"
 
 const execFileAsync = promisify(execFile)
 
@@ -33,7 +34,7 @@ function extractGrainLevel(visualDescription: string): number {
 }
 
 export async function renderVideo(options: RenderOptions): Promise<string> {
-  const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"
+  const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg"
   const outputDir = path.join("/tmp", "magoo-videos")
   const outputPath = path.join(outputDir, `${options.videoId}.mp4`)
 
@@ -93,7 +94,7 @@ export async function renderVideo(options: RenderOptions): Promise<string> {
 }
 
 export async function checkFfmpegAvailable(): Promise<boolean> {
-  const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"
+  const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg"
 
   try {
     await execFileAsync(ffmpegPath, ["-version"])

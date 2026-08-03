@@ -5,6 +5,7 @@ import { execFile } from "child_process"
 import { promisify } from "util"
 import fs from "fs"
 import path from "path"
+import ffmpegStatic from "ffmpeg-static"
 
 const execFileAsync = promisify(execFile)
 
@@ -41,7 +42,7 @@ function parseAudioMood(description: string): {
 }
 
 export async function generateAudio(options: AudioGenerationOptions): Promise<string> {
-  const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"
+  const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg"
   const outputDir = path.join("/tmp", "magoo-audio")
   const outputPath = path.join(outputDir, `${options.videoId}_audio.wav`)
 

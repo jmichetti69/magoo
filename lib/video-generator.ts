@@ -8,6 +8,7 @@ import { execFile } from "child_process"
 import { promisify } from "util"
 import fs from "fs"
 import path from "path"
+import ffmpegStatic from "ffmpeg-static"
 
 const execFileAsync = promisify(execFile)
 
@@ -113,7 +114,7 @@ async function composeVideoWithAudio(
   audioPath: string,
   outputPath: string
 ): Promise<void> {
-  const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"
+  const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg"
 
   const ffmpegArgs = [
     "-i",

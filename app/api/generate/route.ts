@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { generateVideo } from "@/lib/video-generator"
 
+const MAX_PROMPT_LENGTH = 2000
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -8,6 +10,15 @@ export async function POST(request: NextRequest) {
 
     if (!prompt?.trim()) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 })
+    }
+
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      return NextResponse.json(
+        {
+          error: `Prompt must be ${MAX_PROMPT_LENGTH} characters or less`,
+        },
+        { status: 400 }
+      )
     }
 
     const isMockMode = process.env.MAGOO_MOCK_MODE === "true"

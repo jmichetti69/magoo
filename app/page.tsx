@@ -39,8 +39,13 @@ export default function Home() {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h1 style={styles.title}>Magoo</h1>
-        <p style={styles.subtitle}>AI-generated ambient looping videos</p>
+        <div>
+          <h1 style={styles.title}>Magoo</h1>
+          <p style={styles.subtitle}>AI-generated ambient looping videos</p>
+        </div>
+        <a href="/gallery" style={styles.galleryLink}>
+          Gallery
+        </a>
       </header>
 
       <section style={styles.content}>
@@ -132,7 +137,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "2rem",
   },
   header: {
-    textAlign: "center",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: "3rem",
   },
   title: {
@@ -146,6 +153,15 @@ const styles: Record<string, React.CSSProperties> = {
   subtitle: {
     fontSize: "1.25rem",
     color: "#94a3b8",
+  },
+  galleryLink: {
+    padding: "0.75rem 1.5rem",
+    background: "rgba(59, 130, 246, 0.1)",
+    border: "1px solid rgba(59, 130, 246, 0.3)",
+    borderRadius: "0.5rem",
+    color: "#93c5fd",
+    textDecoration: "none",
+    fontWeight: "600",
   },
   content: {
     display: "grid",
