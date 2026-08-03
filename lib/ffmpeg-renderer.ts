@@ -25,13 +25,19 @@ function extractColors(description: string): string[] {
   return [...hexMatches, ...rgbMatches]
 }
 
-// Derive a grain amount from mood hints in the description. Kept visible
-// enough that the video reads as "alive" rather than a static color card.
-function extractGrainLevel(visualDescription: string): number {
+// Derive a grain amount and motion pace from mood hints in the description.
+function extractMoodParams(visualDescription: string): {
+  grain: number
+  breatheSeconds: number
+  hueSeconds: number
+} {
   const lower = visualDescription.toLowerCase()
   const isSlow = /slow|gentle|soft|calm|serene/.test(lower)
   const isFast = /fast|quick|energetic|dynamic|vibrant/.test(lower)
-  return isSlow ? 12 : isFast ? 28 : 18
+
+  if (isSlow) return { grain: 12, breatheSeconds: 30, hueSeconds: 60 }
+  if (isFast) return { grain: 28, breatheSeconds: 10, hueSeconds: 20 }
+  return { grain: 18, breatheSeconds: 18, hueSeconds: 36 }
 }
 
 export async function renderVideo(options: RenderOptions): Promise<string> {
@@ -48,13 +54,20 @@ export async function renderVideo(options: RenderOptions): Promise<string> {
     const colors = extractColors(options.visualDescription)
     const color1 = colors[0] || "#1e3c72"
     const color2 = colors[1] || "#2a5298"
-    const grain = extractGrainLevel(options.visualDescription)
+    const { grain, breatheSeconds, hueSeconds } = extractMoodParams(
+      options.visualDescription
+    )
 
-    // Two color sources blended into a diagonal gradient, with subtle
-    // animated grain layered on top for texture.
+    // Two color sources cross-blended with a slowly oscillating ratio (a
+    // "breathing" effect via T in the blend expression), plus a gentle hue
+    // drift, grain, and a soft vignette — real motion instead of a static
+    // gradient card.
+    const breathe = `(0.5+0.5*sin(2*PI*T/${breatheSeconds}))`
     const filterComplex =
-      `[0][1]blend=all_expr='A*(X/W)+B*(1-X/W)'[grad];` +
-      `[grad]noise=alls=${grain}:allf=t+u[out]`
+      `[0][1]blend=all_expr='A*${breathe}+B*(1-${breathe})'[grad];` +
+      `[grad]hue=h='15*sin(2*PI*t/${hueSeconds})':s=1[hued];` +
+      `[hued]noise=alls=${grain}:allf=t+u[grained];` +
+      `[grained]vignette[out]`
 
     const ffmpegArgs = [
       "-f",

@@ -54,23 +54,37 @@ export async function generateAudio(options: AudioGenerationOptions): Promise<st
   try {
     const { mood } = parseAudioMood(options.audioDescription)
 
-    // Base drone frequency: lower for calmer/meditative moods
-    const frequency = mood === "meditative" ? 96 : mood === "energetic" ? 220 : 130
+    // Root frequency: lower for calmer/meditative moods
+    const root = mood === "meditative" ? 96 : mood === "energetic" ? 220 : 130
+    const fifth = root * 1.5
+    const octave = root * 2
+    const tremoloRate = mood === "energetic" ? 0.35 : mood === "meditative" ? 0.08 : 0.15
+    const d = options.duration
 
-    // Mix a soft sine drone with pink noise texture for a simple ambient bed.
-    // Volumes are tuned to be clearly audible (not just a faint hum) while
-    // staying mellow enough for background listening.
+    // A simple three-note drone (root + fifth + octave) instead of a single
+    // tone, mixed with pink noise texture, then run through a slow tremolo
+    // for gentle amplitude movement so the bed doesn't sound perfectly static.
     const ffmpegArgs = [
       "-f",
       "lavfi",
       "-i",
-      `sine=frequency=${frequency}:sample_rate=48000:duration=${options.duration}`,
+      `sine=frequency=${root}:sample_rate=48000:duration=${d}`,
       "-f",
       "lavfi",
       "-i",
-      `anoisesrc=sample_rate=48000:amplitude=0.15:duration=${options.duration}:color=pink`,
+      `sine=frequency=${fifth}:sample_rate=48000:duration=${d}`,
+      "-f",
+      "lavfi",
+      "-i",
+      `sine=frequency=${octave}:sample_rate=48000:duration=${d}`,
+      "-f",
+      "lavfi",
+      "-i",
+      `anoisesrc=sample_rate=48000:amplitude=0.15:duration=${d}:color=pink`,
       "-filter_complex",
-      `[0]volume=0.35[tone];[1]volume=0.2[noise];[tone][noise]amix=inputs=2:duration=first:dropout_transition=2[out]`,
+      `[0]volume=0.3[root];[1]volume=0.15[fifth];[2]volume=0.1[octave];[3]volume=0.2[noise];` +
+        `[root][fifth][octave][noise]amix=inputs=4:duration=first:dropout_transition=2[mixed];` +
+        `[mixed]tremolo=f=${tremoloRate}:d=0.3[out]`,
       "-map",
       "[out]",
       "-ac",
