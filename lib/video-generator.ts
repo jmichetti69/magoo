@@ -2,7 +2,7 @@
 // Converts prompts → descriptions → visual/audio → composite video
 
 import Anthropic from "@anthropic-ai/sdk"
-import { renderVideo, RenderOptions } from "./ffmpeg-renderer"
+import { renderVideo } from "./ffmpeg-renderer"
 import { generateAudio } from "./audio-generator"
 import { execFile } from "child_process"
 import { promisify } from "util"
@@ -26,9 +26,24 @@ export interface VideoGenerationResult {
   videoPath?: string
 }
 
+// Canned descriptions used when MAGOO_MOCK_MODE=true, so the ffmpeg/audio
+// pipeline can be built and tested before an Anthropic key is available.
+const MOCK_VISUAL_DESCRIPTION = `Soft diagonal gradient from #1e3c72 to #2a5298, evoking a calm twilight sky.
+Gentle, slow-moving grain texture drifts across the frame like light mist.
+Serene, meditative pacing with no abrupt transitions — designed for a seamless 60-second loop.`
+
+const MOCK_AUDIO_DESCRIPTION = `Calm, meditative ambient bed built from a low sustained drone with soft pink-noise
+texture underneath, evoking gentle, slow-moving water. No percussion, no sharp transients —
+just a continuous, seamless atmosphere suited for looping.`
+
 export async function generateVideoDescription(
   prompt: string
 ): Promise<{ visual: string; audio: string }> {
+  if (process.env.MAGOO_MOCK_MODE === "true") {
+    console.log("[mock mode] Skipping Claude call, using canned descriptions")
+    return { visual: MOCK_VISUAL_DESCRIPTION, audio: MOCK_AUDIO_DESCRIPTION }
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY not configured")
@@ -105,6 +120,10 @@ async function composeVideoWithAudio(
     videoPath,
     "-i",
     audioPath,
+    "-map",
+    "0:v:0",
+    "-map",
+    "1:a:0",
     "-c:v",
     "copy",
     "-c:a",

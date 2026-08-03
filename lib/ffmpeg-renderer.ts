@@ -24,40 +24,12 @@ function extractColors(description: string): string[] {
   return [...hexMatches, ...rgbMatches]
 }
 
-// Generate an ffmpeg filter chain from visual description
-function generateFilterChain(options: RenderOptions): string {
-  const { width, height, duration, fps, visualDescription } = options
-  const colors = extractColors(visualDescription)
-
-  // Extract animation speed hints from description
-  const isSlow = /slow|gentle|soft|calm|serene/.test(visualDescription.toLowerCase())
-  const isFast = /fast|quick|energetic|dynamic|vibrant/.test(visualDescription.toLowerCase())
-  const speed = isSlow ? 0.5 : isFast ? 2 : 1
-
-  // Default gradient if no colors found
-  const color1 = colors[0] || "#1e3c72"
-  const color2 = colors[1] || "#2a5298"
-
-  // Build filter chain for:
-  // 1. Gradient background
-  // 2. Particle/noise overlay
-  // 3. Subtle animation
-
-  const filters = [
-    // Create gradient background
-    `color=c=${color1}:s=${width}x${height}:d=${duration}`,
-    // Add noise/grain for texture
-    `[0]split=2[a][b]`,
-    `[b]format=pix_fmts=gray,geq='p(X\\,Y)':random=123[noise]`,
-    `[a][noise]blend=all_mode=softlight:all_opacity=0.1`,
-  ].join(";")
-
-  return filters
-}
-
-// Generate frame count for duration
-function getFrameCount(duration: number, fps: number): number {
-  return Math.ceil(duration * fps)
+// Derive a gentle grain amount from mood hints in the description
+function extractGrainLevel(visualDescription: string): number {
+  const lower = visualDescription.toLowerCase()
+  const isSlow = /slow|gentle|soft|calm|serene/.test(lower)
+  const isFast = /fast|quick|energetic|dynamic|vibrant/.test(lower)
+  return isSlow ? 4 : isFast ? 14 : 8
 }
 
 export async function renderVideo(options: RenderOptions): Promise<string> {
@@ -71,32 +43,39 @@ export async function renderVideo(options: RenderOptions): Promise<string> {
   }
 
   try {
-    // Simple approach: create a gradient video with ffmpeg
-    const filterChain = generateFilterChain(options)
-    const frameCount = getFrameCount(options.duration, options.fps)
-
-    // Extract primary color for gradient base
     const colors = extractColors(options.visualDescription)
-    const primaryColor = colors[0] || "hsl(220,10%,15%)"
+    const color1 = colors[0] || "#1e3c72"
+    const color2 = colors[1] || "#2a5298"
+    const grain = extractGrainLevel(options.visualDescription)
 
-    // Use color filter + noise for procedural generation
+    // Two color sources blended into a diagonal gradient, with subtle
+    // animated grain layered on top for texture.
+    const filterComplex =
+      `[0][1]blend=all_expr='A*(X/W)+B*(1-X/W)'[grad];` +
+      `[grad]noise=alls=${grain}:allf=t+u[out]`
+
     const ffmpegArgs = [
       "-f",
       "lavfi",
       "-i",
-      `color=c=${primaryColor}:s=${options.width}x${options.height}:d=${options.duration}`,
+      `color=c=${color1}:s=${options.width}x${options.height}:d=${options.duration}`,
       "-f",
       "lavfi",
       "-i",
-      `anullsrc=r=48000:cl=mono:d=${options.duration}`,
+      `color=c=${color2}:s=${options.width}x${options.height}:d=${options.duration}`,
+      "-filter_complex",
+      filterComplex,
+      "-map",
+      "[out]",
+      "-r",
+      String(options.fps),
       "-c:v",
       "libx264",
       "-preset",
       "fast",
       "-pix_fmt",
       "yuv420p",
-      "-c:a",
-      "aac",
+      "-an",
       outputPath,
     ]
 

@@ -51,24 +51,29 @@ export async function generateAudio(options: AudioGenerationOptions): Promise<st
   }
 
   try {
-    const { tempo, mood } = parseAudioMood(options.audioDescription)
+    const { mood } = parseAudioMood(options.audioDescription)
 
-    // Use ffmpeg to generate ambient tone
-    // Create a silent audio file with gentle pink noise overlay
+    // Base drone frequency: lower for calmer/meditative moods
+    const frequency = mood === "meditative" ? 96 : mood === "energetic" ? 220 : 130
+
+    // Mix a soft sine drone with pink noise texture for a simple ambient bed
     const ffmpegArgs = [
       "-f",
       "lavfi",
       "-i",
-      `anullsrc=r=48000:cl=stereo:d=${options.duration}`,
+      `sine=frequency=${frequency}:sample_rate=48000:duration=${options.duration}`,
       "-f",
       "lavfi",
       "-i",
-      `anoise=c=pink:r=48000:duration=${options.duration}`,
+      `anoisesrc=sample_rate=48000:amplitude=0.03:duration=${options.duration}:color=pink`,
       "-filter_complex",
-      // Mix silent source with pink noise at low volume for ambient texture
-      `[0][1]amix=inputs=2:duration=first:dropout_transition=2[a],volume=0.05[out]`,
+      `[0]volume=0.12[tone];[1]volume=0.06[noise];[tone][noise]amix=inputs=2:duration=first:dropout_transition=2[out]`,
       "-map",
       "[out]",
+      "-ac",
+      "2",
+      "-ar",
+      "48000",
       "-acodec",
       "pcm_s16le",
       outputPath,
@@ -83,44 +88,6 @@ export async function generateAudio(options: AudioGenerationOptions): Promise<st
     return outputPath
   } catch (error) {
     console.error(`Failed to generate audio for ${options.videoId}:`, error)
-    throw error
-  }
-}
-
-export async function generateSilentAudio(
-  videoId: string,
-  duration: number
-): Promise<string> {
-  const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"
-  const outputDir = path.join("/tmp", "magoo-audio")
-  const outputPath = path.join(outputDir, `${videoId}_audio.wav`)
-
-  // Ensure output directory exists
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true })
-  }
-
-  try {
-    // Generate silent audio track (for testing without actual audio synthesis)
-    const ffmpegArgs = [
-      "-f",
-      "lavfi",
-      "-i",
-      `anullsrc=r=48000:cl=stereo:d=${duration}`,
-      "-acodec",
-      "pcm_s16le",
-      outputPath,
-    ]
-
-    await execFileAsync(ffmpegPath, ffmpegArgs)
-
-    if (!fs.existsSync(outputPath)) {
-      throw new Error("Audio file was not created")
-    }
-
-    return outputPath
-  } catch (error) {
-    console.error(`Failed to generate silent audio for ${videoId}:`, error)
     throw error
   }
 }

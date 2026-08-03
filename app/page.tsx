@@ -6,6 +6,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [videoId, setVideoId] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -13,6 +14,7 @@ export default function Home() {
 
     setIsLoading(true)
     setStatus(null)
+    setVideoId(null)
 
     try {
       const response = await fetch("/api/generate", {
@@ -21,9 +23,11 @@ export default function Home() {
         body: JSON.stringify({ prompt }),
       })
 
-      if (!response.ok) throw new Error("Generation failed")
       const data = await response.json()
-      setStatus(`Video generated: ${data.videoId}`)
+      if (!response.ok) throw new Error(data.error || "Generation failed")
+
+      setStatus(data.message || "Video generated!")
+      setVideoId(data.videoId)
       setPrompt("")
     } catch (error) {
       setStatus(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -75,6 +79,24 @@ export default function Home() {
               }}
             >
               {status}
+            </div>
+          )}
+
+          {videoId && !status?.startsWith("Error") && (
+            <div style={styles.videoPreview}>
+              <video
+                controls
+                loop
+                style={styles.video}
+                src={`/api/download?videoId=${encodeURIComponent(videoId)}`}
+              />
+              <a
+                href={`/api/download?videoId=${encodeURIComponent(videoId)}`}
+                download
+                style={styles.downloadLink}
+              >
+                Download video
+              </a>
             </div>
           )}
         </div>
@@ -172,6 +194,26 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "0.5rem",
     marginTop: "1rem",
     fontSize: "0.9rem",
+  },
+  videoPreview: {
+    marginTop: "1rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.75rem",
+  },
+  video: {
+    width: "100%",
+    borderRadius: "0.5rem",
+    border: "1px solid rgba(148, 163, 184, 0.3)",
+  },
+  downloadLink: {
+    textAlign: "center",
+    background: "rgba(59, 130, 246, 0.15)",
+    border: "1px solid rgba(59, 130, 246, 0.4)",
+    borderRadius: "0.5rem",
+    padding: "0.6rem",
+    fontWeight: "600",
+    color: "#93c5fd",
   },
   list: {
     listStyle: "none",

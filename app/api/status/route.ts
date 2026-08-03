@@ -10,6 +10,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "videoId required" }, { status: 400 })
   }
 
+  if (!/^video_\d+_[a-z0-9]+$/.test(videoId)) {
+    return NextResponse.json({ error: "Invalid video ID" }, { status: 403 })
+  }
+
   try {
     const videoDir = path.join("/tmp", "magoo-videos")
     const finalVideoPath = path.join(videoDir, `${videoId}_final.mp4`)
