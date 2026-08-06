@@ -1,40 +1,91 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+
+interface JobRecord {
+  jobId: string
+  stage: string
+  error?: string
+  youtubeUrl?: string
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  queued: "Queued...",
+  image: "Preparing the starting image...",
+  kling_submit: "Sending image to Kling AI...",
+  kling_poll: "Kling is animating your image...",
+  looping: "Looping video for extended playback...",
+  youtube_upload: "Uploading to YouTube...",
+  completed: "Done!",
+  failed: "Failed",
+}
+
+const POLL_INTERVAL_MS = 4000
 
 export default function Home() {
   const [prompt, setPrompt] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [videoId, setVideoId] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [job, setJob] = useState<JobRecord | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current)
+    }
+  }, [])
+
+  const pollJob = (jobId: string) => {
+    if (pollTimer.current) clearInterval(pollTimer.current)
+    pollTimer.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`)
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || "Failed to check job status")
+
+        setJob(data)
+        if (data.stage === "completed" || data.stage === "failed") {
+          if (pollTimer.current) clearInterval(pollTimer.current)
+        }
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Unknown error")
+        if (pollTimer.current) clearInterval(pollTimer.current)
+      }
+    }, POLL_INTERVAL_MS)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!prompt.trim()) return
+    if (!prompt.trim() && !imageFile) return
 
-    setIsLoading(true)
-    setStatus(null)
-    setVideoId(null)
+    setIsSubmitting(true)
+    setErrorMessage(null)
+    setJob(null)
 
     try {
-      const response = await fetch("/api/generate", {
+      const formData = new FormData()
+      formData.append("prompt", prompt.trim())
+      if (imageFile) formData.append("image", imageFile)
+
+      const response = await fetch("/api/jobs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: formData,
       })
 
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || "Generation failed")
+      if (!response.ok) throw new Error(data.error || "Failed to start generation")
 
-      setStatus(data.message || "Video generated!")
-      setVideoId(data.videoId)
-      setPrompt("")
+      setJob({ jobId: data.jobId, stage: "queued" })
+      pollJob(data.jobId)
     } catch (error) {
-      setStatus(`Error: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setErrorMessage(error instanceof Error ? error.message : "Unknown error")
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
+
+  const isRunning = Boolean(job) && job?.stage !== "completed" && job?.stage !== "failed"
 
   return (
     <div style={styles.container}>
@@ -52,8 +103,9 @@ export default function Home() {
         <div style={styles.card}>
           <h2>Create a Video</h2>
           <p style={styles.description}>
-            Describe the ambient scene you'd like to generate. Magoo will create a beautiful
-            looping video with matching music.
+            Describe the ambient scene you'd like, upload a starting photo, or both. Magoo
+            will animate it with Kling AI, loop it for extended playback, and upload it to
+            YouTube.
           </p>
 
           <form onSubmit={handleSubmit} style={styles.form}>
@@ -62,46 +114,65 @@ export default function Home() {
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="e.g., 'Soft ocean waves washing onto a sandy beach at sunset, with gentle light reflections'"
               style={styles.textarea}
-              disabled={isLoading}
+              disabled={isSubmitting || isRunning}
             />
+            <label style={styles.fileLabel}>
+              Starting photo (optional — Magoo generates one from your description if left blank)
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                disabled={isSubmitting || isRunning}
+                style={styles.fileInput}
+              />
+            </label>
             <button
               type="submit"
               style={{
                 ...styles.button,
-                opacity: isLoading || !prompt.trim() ? 0.6 : 1,
+                opacity: isSubmitting || isRunning || (!prompt.trim() && !imageFile) ? 0.6 : 1,
               }}
-              disabled={isLoading || !prompt.trim()}
+              disabled={isSubmitting || isRunning || (!prompt.trim() && !imageFile)}
             >
-              {isLoading ? "Generating..." : "Generate Video"}
+              {isSubmitting ? "Starting..." : isRunning ? "Generating..." : "Generate Video"}
             </button>
           </form>
 
-          {status && (
+          {errorMessage && <div style={{ ...styles.status, backgroundColor: "#7f1d1d" }}>{errorMessage}</div>}
+
+          {job && (
             <div
               style={{
                 ...styles.status,
-                backgroundColor: status.startsWith("Error") ? "#7f1d1d" : "#1e3a1f",
+                backgroundColor: job.stage === "failed" ? "#7f1d1d" : "#1e3a1f",
               }}
             >
-              {status}
+              {job.stage === "failed"
+                ? `Failed: ${job.error || "unknown error"}`
+                : STAGE_LABELS[job.stage] || job.stage}
             </div>
           )}
 
-          {videoId && !status?.startsWith("Error") && (
+          {job?.stage === "completed" && (
             <div style={styles.videoPreview}>
               <video
                 controls
                 loop
                 style={styles.video}
-                src={`/api/download?videoId=${encodeURIComponent(videoId)}`}
+                src={`/api/download?videoId=${encodeURIComponent(job.jobId)}`}
               />
               <a
-                href={`/api/download?videoId=${encodeURIComponent(videoId)}`}
+                href={`/api/download?videoId=${encodeURIComponent(job.jobId)}`}
                 download
                 style={styles.downloadLink}
               >
                 Download video
               </a>
+              {job.youtubeUrl && (
+                <a href={job.youtubeUrl} target="_blank" rel="noreferrer" style={styles.downloadLink}>
+                  View on YouTube
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -110,14 +181,14 @@ export default function Home() {
           <h2>What is Magoo?</h2>
           <p style={styles.description}>
             Magoo generates beautiful, looping ambient videos perfect for relaxation, focus,
-            or background ambience. Each video features procedurally generated visuals with
-            AI-composed music.
+            or background ambience. Each video starts from a photo (yours or AI-generated),
+            animated by Kling AI and looped for extended playback.
           </p>
           <ul style={styles.list}>
-            <li>✨ AI-generated visuals</li>
-            <li>🎵 Ambient music composition</li>
-            <li>♾️ Seamless looping</li>
-            <li>🎬 Direct YouTube export</li>
+            <li>✨ AI-generated or uploaded starting image</li>
+            <li>🎬 Kling AI animation with sound</li>
+            <li>♾️ Looped for hours of seamless playback</li>
+            <li>📺 Direct YouTube upload</li>
           </ul>
         </div>
       </section>
@@ -195,6 +266,16 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "1rem",
     minHeight: "120px",
     resize: "vertical",
+    color: "#e2e8f0",
+  },
+  fileLabel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+    fontSize: "0.85rem",
+    color: "#94a3b8",
+  },
+  fileInput: {
     color: "#e2e8f0",
   },
   button: {

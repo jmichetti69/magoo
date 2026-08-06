@@ -26,6 +26,9 @@ function extractColors(description: string): string[] {
 }
 
 // Derive a grain amount and motion pace from mood hints in the description.
+// Periods are short enough (single-digit to low-teens seconds) that the
+// breathing/hue motion is visible within a few seconds of watching, not just
+// over the full 60s loop — a full cycle every 20-60s reads as a static image.
 function extractMoodParams(visualDescription: string): {
   grain: number
   breatheSeconds: number
@@ -35,9 +38,9 @@ function extractMoodParams(visualDescription: string): {
   const isSlow = /slow|gentle|soft|calm|serene/.test(lower)
   const isFast = /fast|quick|energetic|dynamic|vibrant/.test(lower)
 
-  if (isSlow) return { grain: 12, breatheSeconds: 30, hueSeconds: 60 }
-  if (isFast) return { grain: 28, breatheSeconds: 10, hueSeconds: 20 }
-  return { grain: 18, breatheSeconds: 18, hueSeconds: 36 }
+  if (isSlow) return { grain: 12, breatheSeconds: 8, hueSeconds: 14 }
+  if (isFast) return { grain: 28, breatheSeconds: 4, hueSeconds: 6 }
+  return { grain: 18, breatheSeconds: 6, hueSeconds: 10 }
 }
 
 export async function renderVideo(options: RenderOptions): Promise<string> {
@@ -51,21 +54,26 @@ export async function renderVideo(options: RenderOptions): Promise<string> {
   }
 
   try {
+    // Claude's real descriptions list a whole palette, so grabbing the first
+    // two hex codes tends to pick near-identical shades from the same
+    // gradient (barely-visible blending). Use the first and last instead —
+    // palettes are typically listed light-to-dark or base-to-accent, so the
+    // endpoints are the most contrasting pair.
     const colors = extractColors(options.visualDescription)
     const color1 = colors[0] || "#1e3c72"
-    const color2 = colors[1] || "#2a5298"
+    const color2 = colors.length > 1 ? colors[colors.length - 1] : "#e0724a"
     const { grain, breatheSeconds, hueSeconds } = extractMoodParams(
       options.visualDescription
     )
 
-    // Two color sources cross-blended with a slowly oscillating ratio (a
-    // "breathing" effect via T in the blend expression), plus a gentle hue
-    // drift, grain, and a soft vignette — real motion instead of a static
-    // gradient card.
+    // Two color sources cross-blended with an oscillating ratio (a
+    // "breathing" effect via T in the blend expression), plus a wide hue
+    // drift, grain, and a soft vignette — real, perceptible motion instead
+    // of a near-static gradient card.
     const breathe = `(0.5+0.5*sin(2*PI*T/${breatheSeconds}))`
     const filterComplex =
       `[0][1]blend=all_expr='A*${breathe}+B*(1-${breathe})'[grad];` +
-      `[grad]hue=h='15*sin(2*PI*t/${hueSeconds})':s=1[hued];` +
+      `[grad]hue=h='50*sin(2*PI*t/${hueSeconds})':s=1[hued];` +
       `[hued]noise=alls=${grain}:allf=t+u[grained];` +
       `[grained]vignette[out]`
 

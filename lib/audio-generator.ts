@@ -58,12 +58,12 @@ export async function generateAudio(options: AudioGenerationOptions): Promise<st
     const root = mood === "meditative" ? 96 : mood === "energetic" ? 220 : 130
     const fifth = root * 1.5
     const octave = root * 2
-    const tremoloRate = mood === "energetic" ? 0.35 : mood === "meditative" ? 0.08 : 0.15
+    const tremoloRate = mood === "energetic" ? 0.35 : mood === "meditative" ? 0.12 : 0.15
     const d = options.duration
 
     // A simple three-note drone (root + fifth + octave) instead of a single
-    // tone, mixed with pink noise texture, then run through a slow tremolo
-    // for gentle amplitude movement so the bed doesn't sound perfectly static.
+    // tone, mixed with pink noise texture, then run through a tremolo for
+    // audible amplitude pulsing so the bed doesn't read as a flat, static hum.
     const ffmpegArgs = [
       "-f",
       "lavfi",
@@ -83,8 +83,11 @@ export async function generateAudio(options: AudioGenerationOptions): Promise<st
       `anoisesrc=sample_rate=48000:amplitude=0.15:duration=${d}:color=pink`,
       "-filter_complex",
       `[0]volume=0.3[root];[1]volume=0.15[fifth];[2]volume=0.1[octave];[3]volume=0.2[noise];` +
-        `[root][fifth][octave][noise]amix=inputs=4:duration=first:dropout_transition=2[mixed];` +
-        `[mixed]tremolo=f=${tremoloRate}:d=0.3[out]`,
+        // normalize=0: amix's default normalize divides output by input count,
+        // which on top of the per-track volume already applied made the mix
+        // faint enough to read as a barely-audible hum instead of a mixed chord.
+        `[root][fifth][octave][noise]amix=inputs=4:duration=first:dropout_transition=2:normalize=0[mixed];` +
+        `[mixed]tremolo=f=${tremoloRate}:d=0.65[out]`,
       "-map",
       "[out]",
       "-ac",
