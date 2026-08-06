@@ -51,7 +51,10 @@ export async function submitImageToVideo(options: KlingSubmitOptions): Promise<s
       image: imageB64,
       prompt: options.prompt,
       duration: String(options.durationSeconds),
-      sound: options.withSound,
+      // Kling's schema wants the string "on"/"off" here, not a JSON boolean
+      // — sending a boolean is what caused the earlier "failed to resolve
+      // the request body" (code 1201) error.
+      sound: options.withSound ? "on" : "off",
     }),
   })
 
