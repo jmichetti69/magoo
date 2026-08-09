@@ -13,6 +13,7 @@ interface VideoItem {
 export default function Gallery() {
   const [videos, setVideos] = useState<VideoItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -29,6 +30,26 @@ export default function Gallery() {
 
     fetchVideos()
   }, [])
+
+  const handleDelete = async (videoId: string) => {
+    if (!confirm("Delete this video? This can't be undone.")) return
+
+    setDeletingId(videoId)
+    try {
+      const response = await fetch(`/api/download?videoId=${encodeURIComponent(videoId)}`, {
+        method: "DELETE",
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || "Failed to delete video")
+      }
+      setVideos((prev) => prev.filter((v) => v.videoId !== videoId))
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to delete video")
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const formatFileSize = (bytes: number) => {
     const mb = (bytes / (1024 * 1024)).toFixed(1)
@@ -73,13 +94,25 @@ export default function Gallery() {
                   <p style={styles.videoId}>{video.videoId}</p>
                   <p style={styles.videoMeta}>{formatFileSize(video.fileSize)}</p>
                   <p style={styles.videoMeta}>{formatDate(video.createdAt)}</p>
-                  <a
-                    href={`/api/download?videoId=${encodeURIComponent(video.videoId)}`}
-                    download
-                    style={styles.downloadBtn}
-                  >
-                    Download
-                  </a>
+                  <div style={styles.actionRow}>
+                    <a
+                      href={`/api/download?videoId=${encodeURIComponent(video.videoId)}`}
+                      download
+                      style={styles.downloadBtn}
+                    >
+                      Download
+                    </a>
+                    <button
+                      onClick={() => handleDelete(video.videoId)}
+                      disabled={deletingId === video.videoId}
+                      style={{
+                        ...styles.deleteBtn,
+                        opacity: deletingId === video.videoId ? 0.6 : 1,
+                      }}
+                    >
+                      {deletingId === video.videoId ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -179,9 +212,14 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#64748b",
     margin: "0.25rem 0",
   },
-  downloadBtn: {
-    display: "inline-block",
+  actionRow: {
+    display: "flex",
+    gap: "0.5rem",
     marginTop: "0.75rem",
+  },
+  downloadBtn: {
+    flex: 1,
+    textAlign: "center",
     padding: "0.5rem 1rem",
     background: "rgba(59, 130, 246, 0.15)",
     border: "1px solid rgba(59, 130, 246, 0.4)",
@@ -190,5 +228,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.85rem",
     fontWeight: "600",
     textDecoration: "none",
+  },
+  deleteBtn: {
+    flex: 1,
+    textAlign: "center",
+    padding: "0.5rem 1rem",
+    background: "rgba(239, 68, 68, 0.15)",
+    border: "1px solid rgba(239, 68, 68, 0.4)",
+    borderRadius: "0.5rem",
+    color: "#fca5a5",
+    fontSize: "0.85rem",
+    fontWeight: "600",
   },
 }

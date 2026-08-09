@@ -16,22 +16,32 @@ export interface LoopOptions {
   outputPath: string
 }
 
-async function getVideoDuration(videoPath: string): Promise<number> {
-  const ffprobePath = "ffprobe"
-  const { stdout } = await execFileAsync(ffprobePath, [
-    "-v", "error",
-    "-show_entries", "format=duration",
-    "-of", "default=noprint_wrappers=1:nokey=1:nokey=1",
-    videoPath,
-  ])
-  return parseFloat(stdout.trim())
+// No standalone ffprobe binary is bundled (only ffmpeg-static), so duration
+// is read from ffmpeg's own stderr banner instead. Running ffmpeg with no
+// output target exits non-zero right after printing stream info, so the
+// duration is pulled from the caught error's stderr.
+async function getVideoDuration(videoPath: string, ffmpegPath: string): Promise<number> {
+  let stderr = ""
+  try {
+    const result = await execFileAsync(ffmpegPath, ["-i", videoPath], { maxBuffer: 1024 * 1024 * 10 })
+    stderr = result.stderr
+  } catch (error) {
+    stderr = (error as { stderr?: string }).stderr || ""
+  }
+
+  const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/)
+  if (!match) {
+    throw new Error("Could not determine video duration from ffmpeg output")
+  }
+  const [, hours, minutes, seconds] = match
+  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds)
 }
 
 export async function loopVideoToDuration(options: LoopOptions): Promise<string> {
   const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg"
   const { clipPath, targetDurationSeconds, outputPath } = options
 
-  const clipDurationSeconds = await getVideoDuration(clipPath)
+  const clipDurationSeconds = await getVideoDuration(clipPath, ffmpegPath)
   if (clipDurationSeconds <= 0) {
     throw new Error(`Invalid video duration: ${clipDurationSeconds}s`)
   }

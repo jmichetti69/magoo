@@ -19,16 +19,46 @@ const STAGE_LABELS: Record<string, string> = {
 
 const POLL_INTERVAL_MS = 4000
 
+const YOUTUBE_ERROR_LABELS: Record<string, string> = {
+  missing_client_credentials:
+    "Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET in .env first, then restart the dev server.",
+  missing_authorization_code: "Google didn't return an authorization code. Try connecting again.",
+  no_refresh_token:
+    "Google didn't issue a refresh token (it only does on first consent). Revoke prior access at myaccount.google.com/permissions, then try again.",
+  token_exchange_failed: "Failed to exchange the authorization code for a token.",
+  access_denied: "Authorization was denied.",
+}
+
 export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [job, setJob] = useState<JobRecord | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null)
+  const [youtubeBanner, setYoutubeBanner] = useState<string | null>(null)
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetch("/api/youtube/status")
+      .then((res) => res.json())
+      .then((data) => setYoutubeConnected(Boolean(data.configured)))
+      .catch(() => setYoutubeConnected(false))
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("youtube") === "connected") {
+      setYoutubeBanner("YouTube connected! Future videos will upload automatically.")
+      setYoutubeConnected(true)
+      window.history.replaceState({}, "", window.location.pathname)
+    } else if (params.get("youtube_error")) {
+      const code = params.get("youtube_error") || ""
+      setYoutubeBanner(YOUTUBE_ERROR_LABELS[code] || `YouTube connection failed: ${code}`)
+      window.history.replaceState({}, "", window.location.pathname)
     }
   }, [])
 
@@ -89,10 +119,24 @@ export default function Home() {
           <h1 style={styles.title}>Magoo</h1>
           <p style={styles.subtitle}>AI-generated ambient looping videos</p>
         </div>
-        <a href="/gallery" style={styles.galleryLink}>
-          Gallery
-        </a>
+        <div style={styles.headerActions}>
+          {youtubeConnected === false && (
+            <a href="/api/youtube/authorize" style={styles.connectYoutubeLink}>
+              Connect YouTube
+            </a>
+          )}
+          {youtubeConnected === true && <span style={styles.youtubeConnected}>✓ YouTube connected</span>}
+          <a href="/gallery" style={styles.galleryLink}>
+            Gallery
+          </a>
+        </div>
       </header>
+
+      {youtubeBanner && (
+        <div style={{ ...styles.status, maxWidth: "1200px", margin: "0 auto 1.5rem", backgroundColor: "#1e3a1f" }}>
+          {youtubeBanner}
+        </div>
+      )}
 
       <section style={styles.content}>
         <div style={styles.card}>
@@ -218,6 +262,26 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#93c5fd",
     textDecoration: "none",
     fontWeight: "600",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+  },
+  connectYoutubeLink: {
+    padding: "0.75rem 1.5rem",
+    background: "rgba(239, 68, 68, 0.1)",
+    border: "1px solid rgba(239, 68, 68, 0.3)",
+    borderRadius: "0.5rem",
+    color: "#fca5a5",
+    textDecoration: "none",
+    fontWeight: "600",
+  },
+  youtubeConnected: {
+    padding: "0.75rem 1rem",
+    color: "#86efac",
+    fontWeight: "600",
+    fontSize: "0.9rem",
   },
   content: {
     display: "grid",

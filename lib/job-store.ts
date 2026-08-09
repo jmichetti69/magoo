@@ -72,6 +72,13 @@ export function updateJob(jobId: string, patch: Partial<JobRecord>): JobRecord {
   return updated
 }
 
+export function deleteJob(jobId: string): void {
+  const p = jobPath(jobId)
+  if (fs.existsSync(p)) {
+    fs.unlinkSync(p)
+  }
+}
+
 export function listJobs(): JobRecord[] {
   ensureDir()
   return fs

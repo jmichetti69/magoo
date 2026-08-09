@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import fs from "fs"
 import path from "path"
 import { Readable } from "stream"
+import { deleteJob } from "@/lib/job-store"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -79,5 +80,44 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Download error:", error)
     return NextResponse.json({ error: "Download failed" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const videoId = searchParams.get("videoId")
+
+  if (!videoId) {
+    return NextResponse.json({ error: "videoId required" }, { status: 400 })
+  }
+
+  if (!/^video_\d+_[a-z0-9]+$/.test(videoId)) {
+    return NextResponse.json({ error: "Invalid video ID" }, { status: 403 })
+  }
+
+  try {
+    const videoDir = path.join("/tmp", "magoo-videos")
+    const finalVideoPath = path.join(videoDir, `${videoId}_final.mp4`)
+
+    if (!fs.existsSync(finalVideoPath)) {
+      return NextResponse.json({ error: "Video not found" }, { status: 404 })
+    }
+
+    fs.unlinkSync(finalVideoPath)
+
+    // Also remove the pre-loop source clip (v2) if still around; its
+    // extension varies (mp4/webm) so match by prefix instead of a fixed name.
+    for (const file of fs.readdirSync(videoDir)) {
+      if (file.startsWith(`${videoId}_source.`)) {
+        fs.unlinkSync(path.join(videoDir, file))
+      }
+    }
+
+    deleteJob(videoId)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Delete error:", error)
+    return NextResponse.json({ error: "Delete failed" }, { status: 500 })
   }
 }
