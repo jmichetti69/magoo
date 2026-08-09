@@ -1,46 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
 import { startJob } from "@/lib/pipeline-orchestrator"
 
-const MAX_PROMPT_LENGTH = 2000
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024 // 20MB
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024 // 500MB
 
 export async function POST(request: NextRequest) {
   try {
     const form = await request.formData()
-    const promptValue = form.get("prompt")
-    const prompt = typeof promptValue === "string" ? promptValue.trim() : ""
-    const imageValue = form.get("image")
-    const uploadedImage = imageValue instanceof File && imageValue.size > 0 ? imageValue : undefined
+    const videoValue = form.get("video")
+    const uploadedVideo = videoValue instanceof File && videoValue.size > 0 ? videoValue : undefined
 
-    if (!prompt && !uploadedImage) {
+    if (!uploadedVideo) {
       return NextResponse.json(
-        { error: "Provide a prompt, an image, or both" },
+        { error: "Video file is required" },
         { status: 400 }
       )
     }
 
-    if (prompt.length > MAX_PROMPT_LENGTH) {
+    if (uploadedVideo.size > MAX_VIDEO_BYTES) {
       return NextResponse.json(
-        { error: `Prompt must be ${MAX_PROMPT_LENGTH} characters or less` },
+        { error: "Video must be 500MB or smaller" },
         { status: 400 }
       )
     }
 
-    if (uploadedImage && uploadedImage.size > MAX_IMAGE_BYTES) {
-      return NextResponse.json(
-        { error: "Image must be 20MB or smaller" },
-        { status: 400 }
-      )
-    }
-
-    if (!uploadedImage && !process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "OPENAI_API_KEY not configured (required to generate an image from a prompt)" },
-        { status: 500 }
-      )
-    }
-
-    const jobId = await startJob({ prompt, uploadedImage })
+    const jobId = await startJob({ uploadedVideo })
 
     return NextResponse.json({ jobId })
   } catch (error) {

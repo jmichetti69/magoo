@@ -9,9 +9,6 @@ import path from "path"
 
 export type JobStage =
   | "queued"
-  | "image"
-  | "kling_submit"
-  | "kling_poll"
   | "looping"
   | "youtube_upload"
   | "completed"
@@ -22,11 +19,7 @@ export interface JobRecord {
   stage: JobStage
   createdAt: number
   updatedAt: number
-  prompt?: string
-  imageSource: "generated" | "uploaded"
-  imagePath?: string
-  klingTaskId?: string
-  clipPath?: string
+  sourceVideoPath?: string
   clipDurationSeconds?: number
   loopedVideoPath?: string
   youtubeVideoId?: string
@@ -48,7 +41,7 @@ function jobPath(jobId: string): string {
 
 export function createJob(
   jobId: string,
-  initial: Partial<JobRecord> & Pick<JobRecord, "imageSource">
+  initial: Partial<JobRecord>
 ): JobRecord {
   ensureDir()
   const now = Date.now()

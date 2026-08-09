@@ -11,9 +11,6 @@ interface JobRecord {
 
 const STAGE_LABELS: Record<string, string> = {
   queued: "Queued...",
-  image: "Preparing the starting image...",
-  kling_submit: "Sending image to Kling AI...",
-  kling_poll: "Kling is animating your image...",
   looping: "Looping video for extended playback...",
   youtube_upload: "Uploading to YouTube...",
   completed: "Done!",
@@ -23,8 +20,7 @@ const STAGE_LABELS: Record<string, string> = {
 const POLL_INTERVAL_MS = 4000
 
 export default function Home() {
-  const [prompt, setPrompt] = useState("")
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [videoFile, setVideoFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [job, setJob] = useState<JobRecord | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -57,7 +53,7 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!prompt.trim() && !imageFile) return
+    if (!videoFile) return
 
     setIsSubmitting(true)
     setErrorMessage(null)
@@ -65,8 +61,7 @@ export default function Home() {
 
     try {
       const formData = new FormData()
-      formData.append("prompt", prompt.trim())
-      if (imageFile) formData.append("image", imageFile)
+      formData.append("video", videoFile)
 
       const response = await fetch("/api/jobs", {
         method: "POST",
@@ -103,25 +98,16 @@ export default function Home() {
         <div style={styles.card}>
           <h2>Create a Video</h2>
           <p style={styles.description}>
-            Describe the ambient scene you'd like, upload a starting photo, or both. Magoo
-            will animate it with Kling AI, loop it for extended playback, and upload it to
-            YouTube.
+            Upload a video from Kling AI. Magoo will loop it for extended playback and upload it to YouTube.
           </p>
 
           <form onSubmit={handleSubmit} style={styles.form}>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g., 'Soft ocean waves washing onto a sandy beach at sunset, with gentle light reflections'"
-              style={styles.textarea}
-              disabled={isSubmitting || isRunning}
-            />
             <label style={styles.fileLabel}>
-              Starting photo (optional — Magoo generates one from your description if left blank)
+              Kling video file (MP4 or WebM)
               <input
                 type="file"
-                accept="image/*"
-                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                accept="video/mp4,video/webm"
+                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
                 disabled={isSubmitting || isRunning}
                 style={styles.fileInput}
               />
@@ -130,11 +116,11 @@ export default function Home() {
               type="submit"
               style={{
                 ...styles.button,
-                opacity: isSubmitting || isRunning || (!prompt.trim() && !imageFile) ? 0.6 : 1,
+                opacity: isSubmitting || isRunning || !videoFile ? 0.6 : 1,
               }}
-              disabled={isSubmitting || isRunning || (!prompt.trim() && !imageFile)}
+              disabled={isSubmitting || isRunning || !videoFile}
             >
-              {isSubmitting ? "Starting..." : isRunning ? "Generating..." : "Generate Video"}
+              {isSubmitting ? "Starting..." : isRunning ? "Processing..." : "Process Video"}
             </button>
           </form>
 
@@ -180,13 +166,12 @@ export default function Home() {
         <div style={styles.card}>
           <h2>What is Magoo?</h2>
           <p style={styles.description}>
-            Magoo generates beautiful, looping ambient videos perfect for relaxation, focus,
-            or background ambience. Each video starts from a photo (yours or AI-generated),
-            animated by Kling AI and looped for extended playback.
+            Magoo processes Kling AI videos and loops them for extended playback—perfect for relaxation, focus, or background ambience. Create your Kling video in the Kling app, download it, then upload it here.
           </p>
           <ul style={styles.list}>
-            <li>✨ AI-generated or uploaded starting image</li>
-            <li>🎬 Kling AI animation with sound</li>
+            <li>🎬 Create video in Kling AI (kling.ai)</li>
+            <li>💾 Download the MP4</li>
+            <li>📤 Upload to Magoo</li>
             <li>♾️ Looped for hours of seamless playback</li>
             <li>📺 Direct YouTube upload</li>
           </ul>
