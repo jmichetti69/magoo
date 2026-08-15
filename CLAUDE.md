@@ -43,7 +43,9 @@ User Input (pre-made Kling video MP4)
 
 ## Blockers / Waiting On
 - ✅ **Kling dependency**: removed by pivoting to manual Kling workflow.
-- **YouTube OAuth** (optional for MVP): Joe can add later for auto-upload; pipeline still completes with a local download link if unset.
+- **YouTube OAuth** (optional for MVP): in progress. Adelle started creating the Google Cloud OAuth client herself but got stuck — Google rejects raw IP addresses (e.g. the Mac mini's Tailscale IP) as an "Authorized redirect URI," and only accepts `localhost`/`127.0.0.1` (over plain HTTP) or a real domain (HTTPS required). **Decision: abandoned that in-progress attempt — Joe will set up the Google Cloud project + OAuth client himself** (as the app operator) rather than Adelle, then just hand Adelle the one-time "log in and click Allow" consent step once it's wired up. Pipeline still completes with a local download link if unset, so this isn't a hard blocker for testing the rest of the flow.
+  - Once Joe has it: set redirect URI to `http://localhost:<port>/api/youtube/callback`, add the channel-owner Google account as a Test User on the OAuth consent screen (required — the upload scope is a restricted scope, and the app isn't going through Google's full verification review), get `YOUTUBE_CLIENT_ID`/`YOUTUBE_CLIENT_SECRET` into `.env`, then use the in-app "Connect YouTube" button (`/api/youtube/authorize` → `/api/youtube/callback`) to mint the refresh token automatically instead of a manual token exchange.
+  - Because the app currently runs on a separate Mac mini reachable only via Tailscale IP (not a real hostname), the one-time OAuth step needs an SSH tunnel (`ssh -L <port>:localhost:<port> user@<tailscale-ip>`) so the browser's address bar genuinely says `localhost` and matches the registered redirect URI.
 
 ## Testing / Local Dev
 1. `npm install` — installs bundled dependencies
