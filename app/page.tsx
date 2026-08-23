@@ -223,7 +223,9 @@ export default function Home() {
       </section>
 
       <footer style={styles.footer}>
-        <p>Magoo © 2026</p>
+        <p>
+          Magoo © 2026 · <a href="/privacy" style={styles.footerLink}>Privacy Policy</a>
+        </p>
       </footer>
     </div>
   )
@@ -374,5 +376,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: "1px solid rgba(148, 163, 184, 0.1)",
     color: "#64748b",
     fontSize: "0.9rem",
+  },
+  footerLink: {
+    color: "#93c5fd",
   },
 }
