@@ -1,6 +1,15 @@
-// Repeats a Kling clip into a multi-hour looping video for
-// YouTube "screensaver" playback, using ffmpeg's -stream_loop with a stream
-// copy (no re-encode) so an 8-hour output takes seconds, not hours, to build.
+// Repeats a Kling clip into a multi-hour looping video for YouTube
+// "screensaver" playback. Two earlier approaches both produced an audible/
+// visible glitch at every loop boundary:
+//   1. -stream_loop with -c copy (stream copy) hard-concatenates
+//      independently-encoded segments, which glitches at every seam.
+//   2. -stream_loop with a full re-encode still glitches, because
+//      -stream_loop works by having the demuxer re-open the input file at
+//      each repetition — that restart itself produces a ~0.1s freeze frame,
+//      regardless of whether the output is stream-copied or re-encoded.
+// The fix is ffmpeg's loop/aloop *filters*, which repeat already-decoded
+// frames within a single continuous decode — there's no file reopen, so
+// there's no seam for a freeze to occur at.
 
 import { execFile } from "child_process"
 import { promisify } from "util"
@@ -16,39 +25,14 @@ export interface LoopOptions {
   outputPath: string
 }
 
-// No standalone ffprobe binary is bundled (only ffmpeg-static), so duration
-// is read from ffmpeg's own stderr banner instead. Running ffmpeg with no
-// output target exits non-zero right after printing stream info, so the
-// duration is pulled from the caught error's stderr.
-async function getVideoDuration(videoPath: string, ffmpegPath: string): Promise<number> {
-  let stderr = ""
-  try {
-    const result = await execFileAsync(ffmpegPath, ["-i", videoPath], { maxBuffer: 1024 * 1024 * 10 })
-    stderr = result.stderr
-  } catch (error) {
-    stderr = (error as { stderr?: string }).stderr || ""
-  }
-
-  const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/)
-  if (!match) {
-    throw new Error("Could not determine video duration from ffmpeg output")
-  }
-  const [, hours, minutes, seconds] = match
-  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds)
-}
+// loop's "size" is a frame count, capped at 32767 by ffmpeg. A source clip
+// this long (~34 minutes at 24fps) is far beyond any realistic Kling clip,
+// so a fixed constant avoids an extra probe/decode pass to count frames.
+const MAX_LOOP_FRAME_SIZE = 32767
 
 export async function loopVideoToDuration(options: LoopOptions): Promise<string> {
   const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || "ffmpeg"
   const { clipPath, targetDurationSeconds, outputPath } = options
-
-  const clipDurationSeconds = await getVideoDuration(clipPath, ffmpegPath)
-  if (clipDurationSeconds <= 0) {
-    throw new Error(`Invalid video duration: ${clipDurationSeconds}s`)
-  }
-
-  // -stream_loop N loops the input N *additional* times (N+1 total plays).
-  const totalPlays = Math.ceil(targetDurationSeconds / clipDurationSeconds)
-  const loopCount = Math.max(0, totalPlays - 1)
 
   const outputDir = path.dirname(outputPath)
   if (!fs.existsSync(outputDir)) {
@@ -56,14 +40,29 @@ export async function loopVideoToDuration(options: LoopOptions): Promise<string>
   }
 
   const ffmpegArgs = [
-    "-stream_loop",
-    String(loopCount),
     "-i",
     clipPath,
+    "-filter_complex",
+    `[0:v]loop=loop=-1:size=${MAX_LOOP_FRAME_SIZE}:start=0,setpts=N/FRAME_RATE/TB[v];` +
+      `[0:a]aloop=loop=-1:size=2e9:start=0,asetpts=N/SR/TB[a]`,
+    "-map",
+    "[v]",
+    "-map",
+    "[a]",
     "-t",
     String(targetDurationSeconds),
-    "-c",
-    "copy",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "21",
+    "-c:a",
+    "aac",
+    "-ar",
+    "44100",
+    "-movflags",
+    "+faststart",
     outputPath,
   ]
 
