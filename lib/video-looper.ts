@@ -54,9 +54,27 @@ export async function loopVideoToDuration(options: LoopOptions): Promise<string>
     "-c:v",
     "libx264",
     "-preset",
-    "veryfast",
+    "fast",
     "-crf",
     "21",
+    "-profile:v",
+    "high",
+    "-pix_fmt",
+    "yuv420p",
+    // Without an explicit keyframe interval, libx264 defaults to placing one
+    // at least every 250 frames (~10s at 24fps) and may add more at detected
+    // scene cuts — the loop point itself looks like a scene cut, since frame
+    // 0 is a hard pixel jump from the clip's last frame. That combination
+    // produced a stream that stalled in hardware decoders (Safari/QuickTime
+    // on Mac) even though ffmpeg's own software decoder played it back fine.
+    // A fixed 2s keyframe interval with scene-cut detection disabled forces
+    // regular, predictable GOPs that hardware decoders handle reliably.
+    "-g",
+    "48",
+    "-keyint_min",
+    "48",
+    "-sc_threshold",
+    "0",
     "-c:a",
     "aac",
     "-ar",
